@@ -3,6 +3,7 @@ package archive
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -129,7 +130,32 @@ func TestZipArchiver_Multiple(t *testing.T) {
 
 }
 
+func TestZipArchiver_MultipleWithModes(t *testing.T) {
+	zipfilepath := "archive-content-with-modes.zip"
+	content := map[string][]byte{
+		"file1.txt": []byte("This is file 1"),
+		"file2.txt": []byte("This is file 2"),
+		"file3.txt": []byte("This is file 3"),
+	}
+	modes := map[string]string{
+		"file1.txt": "644",
+		"file2.txt": "400",
+		"file3.txt": "755",
+	}
+
+	archiver := NewZipArchiver(zipfilepath)
+	if err := archiver.ArchiveMultipleWithModes(content, nil, modes); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	ensureContentsWithModes(t, zipfilepath, content, modes)
+}
+
 func ensureContents(t *testing.T, zipfilepath string, wants map[string][]byte) {
+	ensureContentsWithModes(t, zipfilepath, wants, nil)
+}
+
+func ensureContentsWithModes(t *testing.T, zipfilepath string, wants map[string][]byte, wantsModes map[string]string) {
 	r, err := zip.OpenReader(zipfilepath)
 	if err != nil {
 		t.Fatalf("could not open zip file: %s", err)
@@ -140,15 +166,27 @@ func ensureContents(t *testing.T, zipfilepath string, wants map[string][]byte) {
 		t.Errorf("mismatched file count, got %d, want %d", len(r.File), len(wants))
 	}
 	for _, cf := range r.File {
-		ensureContent(t, wants, cf)
+		ensureContentWithModes(t, wants, cf, wantsModes)
 	}
 }
 
-func ensureContent(t *testing.T, wants map[string][]byte, got *zip.File) {
+func ensureContentWithModes(t *testing.T, wants map[string][]byte, got *zip.File, wantsModes map[string]string) {
 	want, ok := wants[got.Name]
 	if !ok {
 		t.Errorf("additional file in zip: %s", got.Name)
 		return
+	}
+
+	// check for wanted mode before
+	if wantMode, ok := wantsModes[got.Name]; ok {
+		if wantMode[0] == '0' {
+			wantMode = wantMode[1:]
+		}
+		if wantMode != fmt.Sprintf("%o", got.FileInfo().Mode()) {
+			t.Errorf("file in zip %s has wrong permissions\ngot %o\nwants %s\n",
+				got.Name, got.FileInfo().Mode(), wantMode)
+			return
+		}
 	}
 
 	r, err := got.Open()
@@ -166,4 +204,8 @@ func ensureContent(t *testing.T, wants map[string][]byte, got *zip.File) {
 	if gotContent != wantContent {
 		t.Errorf("mismatched content\ngot\n%s\nwant\n%s", gotContent, wantContent)
 	}
+}
+
+func ensureContent(t *testing.T, wants map[string][]byte, got *zip.File) {
+	ensureContentWithModes(t, wants, got, nil)
 }

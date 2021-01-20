@@ -3,10 +3,12 @@ package archive
 import (
 	"archive/zip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -23,12 +25,49 @@ func NewZipArchiver(filepath string) Archiver {
 }
 
 func (a *ZipArchiver) ArchiveContent(content []byte, infilename string) error {
+	return a.ArchiveContentWithMode(content, infilename, "", "")
+}
+
+func (a *ZipArchiver) ArchiveContentWithMode(content []byte, infilename string, modeFrom string, mode string) error {
 	if err := a.open(); err != nil {
 		return err
 	}
 	defer a.close()
 
-	f, err := a.writer.Create(filepath.ToSlash(infilename))
+	var (
+		f   io.Writer
+		err error
+	)
+
+	if modeFrom != "" {
+		fi, err := assertValidFile(modeFrom)
+		if err != nil {
+			return err
+		}
+		fh, err := zip.FileInfoHeader(fi)
+		if err != nil {
+			return fmt.Errorf("error creating file header: %s", err)
+		}
+		fh.Name = filepath.ToSlash(filepath.ToSlash(infilename))
+		fh.Method = zip.Deflate
+		// fh.Modified alone isn't enough when using a zero value
+		fh.SetModTime(time.Time{})
+		f, err = a.writer.CreateHeader(fh)
+	} else if mode != "" {
+		o, err := strconv.ParseUint(mode, 8, 32)
+		if err != nil {
+			return fmt.Errorf("error parsing file mode %s: %s", mode, err)
+		}
+
+		fh := &zip.FileHeader{
+			Name:   filepath.ToSlash(infilename),
+			Method: zip.Deflate,
+		}
+		fh.SetMode(os.FileMode(o))
+		f, err = a.writer.CreateHeader(fh)
+	} else {
+		f, err = a.writer.Create(filepath.ToSlash(infilename))
+	}
 	if err != nil {
 		return err
 	}
@@ -150,7 +189,7 @@ func (a *ZipArchiver) ArchiveDir(indirname string, excludes []string) error {
 	})
 }
 
-func (a *ZipArchiver) ArchiveMultiple(content map[string][]byte) error {
+func (a *ZipArchiver) ArchiveMultipleWithModes(content map[string][]byte, modesFrom map[string]string, modes map[string]string) error {
 	if err := a.open(); err != nil {
 		return err
 	}
@@ -166,7 +205,45 @@ func (a *ZipArchiver) ArchiveMultiple(content map[string][]byte) error {
 	sort.Strings(keys)
 
 	for _, filename := range keys {
-		f, err := a.writer.Create(filepath.ToSlash(filename))
+		var (
+			f              io.Writer
+			err            error
+			modeFrom, mode string
+		)
+
+		modeFrom, _ = modesFrom[filename]
+		mode, _ = modes[filename]
+
+		if modeFrom != "" {
+			fi, err := assertValidFile(modeFrom)
+			if err != nil {
+				return err
+			}
+			fh, err := zip.FileInfoHeader(fi)
+			if err != nil {
+				return fmt.Errorf("error creating file header: %s", err)
+			}
+			fh.Name = filepath.ToSlash(filepath.ToSlash(filename))
+			fh.Method = zip.Deflate
+			// fh.Modified alone isn't enough when using a zero value
+			fh.SetModTime(time.Time{})
+			f, err = a.writer.CreateHeader(fh)
+		} else if mode != "" {
+			o, err := strconv.ParseUint(mode, 8, 32)
+			if err != nil {
+				return fmt.Errorf("error parsing file mode %s: %s", mode, err)
+			}
+
+			fh := &zip.FileHeader{
+				Name:   filepath.ToSlash(filename),
+				Method: zip.Deflate,
+			}
+			fh.SetMode(os.FileMode(o))
+			f, err = a.writer.CreateHeader(fh)
+		} else {
+			f, err = a.writer.Create(filepath.ToSlash(filename))
+		}
+
 		if err != nil {
 			return err
 		}
@@ -178,6 +255,9 @@ func (a *ZipArchiver) ArchiveMultiple(content map[string][]byte) error {
 	return nil
 }
 
+func (a *ZipArchiver) ArchiveMultiple(content map[string][]byte) error {
+	return a.ArchiveMultipleWithModes(content, nil, nil)
+}
 func (a *ZipArchiver) open() error {
 	f, err := os.Create(a.filepath)
 	if err != nil {
