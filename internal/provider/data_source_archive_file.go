@@ -42,6 +42,16 @@ func dataSourceFile() *schema.Resource {
 							Required: true,
 							ForceNew: true,
 						},
+						"mode_from": {
+							Type:          schema.TypeString,
+							Optional:      true,
+							ConflictsWith: []string{"mode"},
+						},
+						"mode": {
+							Type:          schema.TypeString,
+							Optional:      true,
+							ConflictsWith: []string{"mode_from"},
+						},
 					},
 				},
 				ConflictsWith: []string{"source_file", "source_dir", "source_content", "source_content_filename"},
@@ -195,12 +205,26 @@ func archive(d *schema.ResourceData) error {
 	} else if v, ok := d.GetOk("source"); ok {
 		vL := v.(*schema.Set).List()
 		content := make(map[string][]byte)
+		modeFrom := make(map[string]string)
+		mode := make(map[string]string)
 		for _, v := range vL {
 			src := v.(map[string]interface{})
 			content[src["filename"].(string)] = []byte(src["content"].(string))
+			if _, ok := src["mode_from"]; ok {
+				modeFrom[src["filename"].(string)] = src["mode_from"].(string)
+			}
+			if _, ok := src["mode"]; ok {
+				mode[src["filename"].(string)] = src["mode"].(string)
+			}
 		}
-		if err := archiver.ArchiveMultiple(content); err != nil {
-			return fmt.Errorf("error archiving content: %s", err)
+		if len(modeFrom) > 0 || len(mode) > 0 {
+			if err := archiver.ArchiveMultipleWithModes(content, modeFrom, mode); err != nil {
+				return fmt.Errorf("error archiving content: %s", err)
+			}
+		} else {
+			if err := archiver.ArchiveMultiple(content); err != nil {
+				return fmt.Errorf("error archiving content: %s", err)
+			}
 		}
 	} else {
 		return fmt.Errorf("one of 'source_dir', 'source_file', 'source_content_filename' must be specified")
