@@ -73,6 +73,22 @@ func TestAccArchiveFile_Basic(t *testing.T) {
 					r.TestCheckResourceAttrPtr("data.archive_file.foo", "output_size", &fileSize),
 				),
 			},
+
+			{
+				Config: testAccArchiveFileMultiWithModeConfig(f),
+				Check: r.ComposeTestCheckFunc(
+					testAccArchiveFileExists(f, &fileSize),
+					r.TestCheckResourceAttrPtr("data.archive_file.foo", "output_size", &fileSize),
+				),
+			},
+
+			{
+				Config: testAccArchiveFileMultiWithModeFromConfig(f),
+				Check: r.ComposeTestCheckFunc(
+					testAccArchiveFileExists(f, &fileSize),
+					r.TestCheckResourceAttrPtr("data.archive_file.foo", "output_size", &fileSize),
+				),
+			},
 		},
 	})
 }
@@ -142,6 +158,38 @@ data "archive_file" "foo" {
 	output_path = "%s"
 }
 `, filepath.ToSlash(outputPath))
+}
+
+func testAccArchiveFileMultiWithModeConfig(outputPath string) string {
+	return fmt.Sprintf(`
+data "archive_file" "foo" {
+	type = "zip"
+	source {
+		filename = "content.txt"
+		content = "This is some content"
+        mode = "640"
+	}
+	output_path = "%s"
+}
+`, filepath.ToSlash(outputPath))
+}
+
+func testAccArchiveFileMultiWithModeFromConfig(outputPath string) string {
+	const mode_from_file_name string = "test_mode_from.txt"
+	parent := filepath.Dir(outputPath)
+	f, _ := os.OpenFile(filepath.Join(parent, mode_from_file_name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0420)
+	f.Close()
+	return fmt.Sprintf(`
+data "archive_file" "foo" {
+	type = "zip"
+	source {
+		filename = "content.txt"
+		content = "This is some content"
+        mode_from = "%s"
+	}
+	output_path = "%s"
+}
+`, filepath.ToSlash(filepath.Join(parent, mode_from_file_name)), filepath.ToSlash(outputPath))
 }
 
 func testTempDir(t *testing.T) string {
