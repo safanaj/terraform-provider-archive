@@ -11,6 +11,7 @@ type Archiver interface {
 	ArchiveFile(infilename string) error
 	ArchiveDir(indirname string, excludes []string) error
 	ArchiveMultiple(content map[string][]byte) error
+	ArchiveMultipleWithModes(content map[string][]byte, modesFrom map[string]string, modes map[string]string) error
 }
 
 type ArchiverBuilder func(filepath string) Archiver

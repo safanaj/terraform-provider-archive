@@ -43,14 +43,14 @@ func dataSourceFile() *schema.Resource {
 							ForceNew: true,
 						},
 						"mode_from": {
-							Type:          schema.TypeString,
-							Optional:      true,
-							ConflictsWith: []string{"mode"},
+							Type:     schema.TypeString,
+							Optional: true,
+							// ConflictsWith: []string{"mode"},
 						},
 						"mode": {
-							Type:          schema.TypeString,
-							Optional:      true,
-							ConflictsWith: []string{"mode_from"},
+							Type:     schema.TypeString,
+							Optional: true,
+							// ConflictsWith: []string{"mode_from"},
 						},
 					},
 				},
@@ -217,14 +217,8 @@ func archive(d *schema.ResourceData) error {
 				mode[src["filename"].(string)] = src["mode"].(string)
 			}
 		}
-		if len(modeFrom) > 0 || len(mode) > 0 {
-			if err := archiver.ArchiveMultipleWithModes(content, modeFrom, mode); err != nil {
-				return fmt.Errorf("error archiving content: %s", err)
-			}
-		} else {
-			if err := archiver.ArchiveMultiple(content); err != nil {
-				return fmt.Errorf("error archiving content: %s", err)
-			}
+		if err := archiver.ArchiveMultipleWithModes(content, modeFrom, mode); err != nil {
+			return fmt.Errorf("error archiving content: %s", err)
 		}
 	} else {
 		return fmt.Errorf("one of 'source_dir', 'source_file', 'source_content_filename' must be specified")

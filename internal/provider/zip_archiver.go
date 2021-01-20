@@ -26,18 +26,6 @@ func NewZipArchiver(filepath string) Archiver {
 
 func (a *ZipArchiver) ArchiveContent(content []byte, infilename string) error {
 	return a.ArchiveContentWithMode(content, infilename, "", "")
-	// if err := a.open(); err != nil {
-	// 	return err
-	// }
-	// defer a.close()
-
-	// f, err := a.writer.Create(filepath.ToSlash(infilename))
-	// if err != nil {
-	// 	return err
-	// }
-
-	// _, err = f.Write(content)
-	// return err
 }
 
 func (a *ZipArchiver) ArchiveContentWithMode(content []byte, infilename string, modeFrom string, mode string) error {
@@ -73,7 +61,7 @@ func (a *ZipArchiver) ArchiveContentWithMode(content []byte, infilename string, 
 
 		fh := &zip.FileHeader{
 			Name:   filepath.ToSlash(infilename),
-			Method: Deflate,
+			Method: zip.Deflate,
 		}
 		fh.SetMode(os.FileMode(o))
 		f, err = a.writer.CreateHeader(fh)
@@ -248,15 +236,13 @@ func (a *ZipArchiver) ArchiveMultipleWithModes(content map[string][]byte, modesF
 
 			fh := &zip.FileHeader{
 				Name:   filepath.ToSlash(filename),
-				Method: Deflate,
+				Method: zip.Deflate,
 			}
 			fh.SetMode(os.FileMode(o))
 			f, err = a.writer.CreateHeader(fh)
 		} else {
 			f, err = a.writer.Create(filepath.ToSlash(filename))
 		}
-
-		// f, err := a.writer.Create(filepath.ToSlash(filename))
 
 		if err != nil {
 			return err
